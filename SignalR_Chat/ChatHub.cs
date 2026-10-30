@@ -1,55 +1,53 @@
-﻿using Microsoft.AspNetCore.SignalR;
+﻿using System.Collections.Concurrent;
+using Microsoft.AspNetCore.SignalR;
 
-namespace SignalR_Chat
+namespace SignalR_Chat;
+
+/*
+Ключовою сутністю в SignalR, через яку клієнти обмінюються повідомленнями 
+із сервером та між собою, є хаб (hub). 
+Хаб представляє певний клас, який успадкований від абстрактного класу 
+Microsoft.AspNetCore.SignalR.Hub.
+*/
+public class ChatHub : Hub
 {
-    /*
-    Ключевой сущностью в SignalR, через которую клиенты обмениваются сообщеними 
-    с сервером и между собой, является хаб (hub). 
-    Хаб представляет некоторый класс, который унаследован от абстрактного класса 
-    Microsoft.AspNetCore.SignalR.Hub.
-    */
-    public class ChatHub : Hub
+    private static readonly ConcurrentDictionary<string, string> Users = new();
+
+    // Відправлення повідомлень
+    public async Task Send(string username, string message)
     {
-        static List<User> Users = new List<User>();
+        // Виклик методу AddMessage на всіх клієнтах
+        await Clients.All.SendAsync("AddMessage", username, message);
+    }
 
-        // Отправка сообщений
-        public async Task Send(string username, string message)
+    // Підключення нового користувача
+    public async Task Connect(string userName)
+    {
+        var id = Context.ConnectionId;
+
+        if (Users.TryAdd(id, userName))
         {
-            // Вызов метода AddMessage на всех клиентах
-            await Clients.All.SendAsync("AddMessage", username, message);
+            var allUsers = Users.Select(x => new User(x.Key, x.Value)).ToList();
+
+            // Виклик методу Connected лише на поточному клієнті, який звернувся до сервера
+            await Clients.Caller.SendAsync("Connected", id, userName, allUsers);
+
+            // Виклик методу NewUserConnected на всіх клієнтах, окрім клієнта з певним id
+            await Clients.AllExcept(id).SendAsync("NewUserConnected", id, userName);
+        }
+    }
+
+    // OnDisconnectedAsync спрацьовує під час відключення клієнта.
+    // Як параметр передається повідомлення про помилку, яке описує,
+    // чому відбулося відключення.
+    public override async Task OnDisconnectedAsync(Exception? exception)
+    {
+        if (Users.TryRemove(Context.ConnectionId, out var userName))
+        {
+            // Виклик методу UserDisconnected на всіх клієнтах
+            await Clients.All.SendAsync("UserDisconnected", Context.ConnectionId, userName);
         }
 
-        // Подключение нового пользователя
-        public async Task Connect(string userName)
-        {
-            var id = Context.ConnectionId;
-
-            if (!Users.Any(x => x.ConnectionId == id))
-            {
-                Users.Add(new User { ConnectionId = id, Name = userName });
-
-                // Вызов метода Connected только на текущем клиенте, который обратился к серверу
-                await Clients.Caller.SendAsync("Connected", id, userName, Users);
-
-                // Вызов метода NewUserConnected на всех клиентах, кроме клиента с определенным id
-                await Clients.AllExcept(id).SendAsync("NewUserConnected", id, userName);
-            }
-        }
-
-        // OnDisconnectedAsync срабатывает при отключении клиента.
-        // В качестве параметра передается сообщение об ошибке, которая описывает,
-        // почему произошло отключение.
-        public override async Task OnDisconnectedAsync(Exception? exception)
-        {
-            var item = Users.FirstOrDefault(x => x.ConnectionId == Context.ConnectionId);
-            if (item != null)
-            {
-                Users.Remove(item);
-                var id = Context.ConnectionId;
-                // Вызов метода UserDisconnected на всех клиентах
-                await Clients.All.SendAsync("UserDisconnected", id, item.Name);
-            }
-            await base.OnDisconnectedAsync(exception);
-        }
+        await base.OnDisconnectedAsync(exception);
     }
 }

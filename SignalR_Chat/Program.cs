@@ -1,16 +1,18 @@
-using SignalR_Chat;   // пространство имен класса ChatHub
+using SignalR_Chat;   // простір імен класу ChatHub
 
 var builder = WebApplication.CreateBuilder(args);
-// Для использования функциональности библиотеки SignalR,
-// в приложении необходимо зарегистрировать соответствующие сервисы
-builder.Services.AddSignalR();  
+
+// Для використання функціональності бібліотеки SignalR,
+// у програмі необхідно зареєструвати відповідні сервіси
+builder.Services.AddSignalR();
 
 var app = builder.Build();
-// С помощью специального метода расширения UseDefaultFiles() можно настроить
-// отправку статических веб-страниц по умолчанию без обращения к ним по полному пути.
+
+// За допомогою спеціального методу розширення UseDefaultFiles() можна налаштувати
+// відправлення статичних веб-сторінок за замовчуванням без звернення до них за повним шляхом.
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
-app.MapHub<ChatHub>("/chat");   // ChatHub будет обрабатывать запросы по пути /chat
+app.MapHub<ChatHub>("/chat");   // ChatHub буде обробляти запити за шляхом /chat
 
 app.Run();
